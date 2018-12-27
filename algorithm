@@ -1,0 +1,3 @@
+# Import data set we created
+
+data <- read.csv("/home/username/Desktop/sp500.csv", header=TRUE)
