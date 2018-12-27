@@ -1,47 +1,29 @@
-#Load Quantmod and Dplyr package
-library(dplyr)
-library(quantmod)
-
-# List of tickers for S&P500 stocks.
-
-ticker <- c("SPY")
-
-# Preliminary names for tickers.
-
-stocks <- c("Index")
-
-# Combine tickers and stock names
-sp500 <- data_frame(ticker, stocks)
-
-# Print data frame
-sp500
-
 # A function to build an xts object of etf returns.
 
-sp500_daily_returns <- function(ticker) {
+sp500_daily_returns <- function(ticker, name) {
+  
+  #Load Quantmod and Dplyr package
+  library(dplyr)
+  library(quantmod)
   
   symbols <- getSymbols(ticker, auto.assign = TRUE, warnings = FALSE)
   
   stock_prices <- do.call(merge, lapply(symbols, function(x) Cl(get(x))))
   
   etf_returns  <- do.call(merge, lapply(stock_prices,
-                                         function(x) periodReturn(x, period = 'daily', type = 'arithmetic')))
+                                        function(x) periodReturn(x, period = 'daily', type = 'arithmetic')))
   
-  #Change the column names to the sector names from our data frame above.
+  # Rename the column
+  names(etf_returns ) <- name
   
-  colnames(etf_returns ) <- sp500$stocks
-  
-  etf_returns 
+  etf_returns
   
 }
 
 # Let's pass in our ticker symbols and build an xts object of stock returns
-etf_returns  <- sp500_daily_returns(sp500_ticker_stocks$ticker)
+etf_returns  <- sp500_daily_returns("MMM", "MMM")
 
 head(etf_returns )
 
-# Rename the column
-names(etf_returns ) <- c("INDEX_SP500")
-
 # Create separate CSV file
-write.csv(etf_returns , file = "sp500.csv")
+write.csv(etf_returns , file = "stock.csv")
