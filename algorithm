@@ -1,3 +1,498 @@
 # Import data set we created
 
 data <- read.csv("/home/username/Desktop/sp500.csv", header=TRUE)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#Installing package
+#install.packages("ggplot2")
+#install.packages("chron")
+#install.packages("reshape2")
+#install.packages("TTR")
+#install.packages("dplyr")
+#8install.packages("forecast")
+#install.packages("fUnitRoots")
+#install.packages("DataCombine")
+
+#Loading library
+library("ggplot2")
+library("chron")
+library("reshape2")
+library("TTR")
+library("dplyr")
+library("forecast")
+library("fUnitRoots")
+library("DataCombine")
+
+#Importing data
+data <- read.csv("/home/myyra/Desktop/Binäärioptiot/Data/DAX.csv", header=TRUE)
+
+#Max print
+options(max.print=100)
+
+#Printing data
+data
+
+#Dropping unnecessary variables
+data <- data[c(1,6,7)]
+
+#Printing data
+data
+
+#Creating lag variable Adj.Closelag
+data2 <- slide(data, Var = "Adj.Close", slideBy = 1)
+
+data2
+
+#Calculating log returns
+
+data2$logreturn <- log(data2$Adj.Close/data2$Adj.Close1)
+
+data2
+
+#Variable x for function
+x <- data2$logreturn * 100
+
+###################################################################################################
+
+#logreturn volatility average for 21 days / 1 month
+lag_apply <- function(x, n, callback){
+  k = length(x)
+
+  result = rep(0, k);
+
+  for(i in 1 : (k - n + 1)){
+    result[i] <- callback(x[i :  (i + n -1)]);
+  }
+  return(result)
+}
+
+stdevlog <- lag_apply(x, 21, function(x){sd(x)})
+
+#Print rolling standard deviation of log returns for 21 days
+stdevlog
+
+#Bind rolling standard deviation for 21 days to main dataset
+data2$volatility1d21avg <- stdevlog
+
+data2
+
+data2$volatility1m <- data2$volatility1d21avg * sqrt(21)
+data2$volatility6m <- data2$volatility1d21avg * sqrt(126)
+data2$volatility1y <- data2$volatility1d21avg * sqrt(252)
+
+data2
+
+###################################################################################################
+
+#Variable x for function
+x <- data2$Adj.Close
+
+#Close price rolling standard deviation for 21 days
+
+lag_apply <- function(x, n, callback){
+
+  k = length(x)
+
+  result = rep(0, k);
+
+  for(i in 1 : (k - n + 1)){
+    result[i] <- callback(x[i :  (i + n -1)]);
+  }
+  return(result)
+}
+
+stdev <- lag_apply(x, 21, function(x){sd(x)})
+
+#Print rolling standard deviation for 21 days
+stdev
+
+#Bind rolling standard deviation for 21 days to main dataset
+data2$stdev.close <- stdev
+
+data2
+
+###################################################################################################
+
+#Variable x for function
+x <- data2$Adj.Close
+
+#Close price mean for 21 days
+lag_apply <- function(x, n, callback){
+  k = length(x)
+
+  result = rep(0, k);
+
+  for(i in 1 : (k - n + 1)){
+    result[i] <- callback(x[i :  (i + n -1)]);
+  }
+  return(result)
+}
+
+mean <- lag_apply(x, 21, function(x){mean(x)})
+
+#Print Close price mean for 21 days
+mean
+
+#Bind Close price mean for 21 days to main dataset
+data2$close.mean <- mean
+
+#Printing data
+data2
+
+###################################################################################################
+
+#Variable x for function
+
+x <- data2$volatility1m
+
+#Volatility rolling standard deviation for 21 days
+lag_apply <- function(x, n, callback){
+  k = length(x)
+
+  result = rep(0, k);
+
+  for(i in 1 : (k - n + 1)){
+    result[i] <- callback(x[i :  (i + n -1)]);
+  }
+  return(result)
+}
+
+stdev.change <- lag_apply(x, 21, function(x){sd(x)})
+
+#Print rolling standard deviation for 21 days
+stdev.change
+
+#Bind rolling standard deviation for 21 days to main dataset
+data2$volatility1m.change <- stdev.change
+
+#Printing data
+data2
+
+#Checking date
+is.factor(data2$Date)
+
+#Creating 95% upper and lower bounds for price & volatility
+data2$upper <- (data2$Adj.Close+(data2$stdev.close * 1.96))
+data2$lower <- (data2$Adj.Close-(data2$stdev.close * 1.96))
+
+data2$vol.upper <- (data2$volatility1m+(data2$volatility1m.change * 1.96))
+data2$vol.lower <- (data2$volatility1m-(data2$volatility1m.change * 1.96))
+
+#Printing data
+data2
+
+#Sorting data
+out <- data2[(order(as.Date(data$Date))),]
+
+#Printing data
+out
+
+#Date conversion
+out$Date <- as.Date(out$Date)
+
+#Printing data
+out
+
+#####################################################################################################################
+
+#Creating time series with rolling mean and 95% confidence intervals
+#plot.ts(out$Average.price)
+
+DAX <- ggplot(out, aes(Date, Adj.Close)) + geom_line() + xlab("Time") + ylab("DAX") + geom_smooth() +
+  geom_ribbon(aes(ymin=lower, ymax=upper, fill = "band"), alpha=0.2) +
+  scale_fill_manual("",values="grey12")
+
+DAX + ggtitle("DAX Development")
+
+help("geom_line")
+
+#####################################################################################################################
+
+#RSI computations
+price <- out$Adj.Close
+price[is.na(price)] <- 0
+RSI_3M <- RSI(price, n=90)
+RSI_3M
+
+RSI_6M <- RSI(price, n=180)
+RSI_6M
+
+DAX_RSI <- as.data.frame(RSI_3M)
+DAX_RSI$RSI_6M <- as.data.frame(RSI_6M)
+DAX_RSI$Date <- out$Date
+DAX_RSI$Date <- as.Date(DAX_RSI$Date)
+DAX_RSI
+
+#Creating time series for NOKIA 3M & 6M RSIs
+DAX_RSIgraph <- ggplot(DAX_RSI, aes(Date)) +
+  geom_line(aes(y = RSI_3M, colour = "RSI_3M")) +
+  geom_line(aes(y = RSI_6M, colour = "RSI_6M")) +
+  xlab("Time") + ylab("DAX 3M&6M RSI")
+
+DAX_RSIgraph + ggtitle("DAX 3M & 6M RSIs")
+
+RSI_3M <- na.omit(RSI_3M)
+RSI_6M <- na.omit(RSI_6M)
+
+mean(RSI_3M)
+mean(RSI_6M)
+
+#####################################################################################################################
+
+#Creating time series with rolling mean and 95% confidence intervals
+#plot.ts(out$Average.price)
+
+DAX_VOL <- ggplot(out, aes(Date, volatility1y)) + geom_line() + xlab("Time") + ylab("DAX Volatility") + geom_smooth() +
+  geom_ribbon(aes(ymin=vol.lower, ymax=vol.upper, fill = "band"), alpha=0.2) +
+  scale_fill_manual("",values="grey12")
+
+DAX_VOL + ggtitle("DAX Volatility Development for 21 days / month")
+
+help("geom_line")
+
+#Calcultaing historical mean for DAX Volatility
+volmean <- out$volatility1m
+volmean <- volmean[!is.na(volmean)]
+na.omit(volmean)
+volmean
+
+mean(volmean)
+
+#####################################################################################################################
+
+out
+
+#Creating simulations datasets
+
+series <- out[c(1,3,4,5,6,7)]
+
+series
+
+#Dataset for close price
+
+#ALKUOSA
+
+close <- series[c(1,2)]
+
+close
+
+Adj.Close <- close$Adj.Close
+
+plot.ts(Adj.Close)
+
+adfTest(Adj.Close, lags = 1, type = c("c"))
+
+diffclose <- close$Adj.Close
+
+diffclose <- diff(diffclose, differences = 1)
+
+diffclose
+
+plot.ts(diffclose)
+
+acf(diffclose, lag.max=20)             # plot a correlogram
+acf(diffclose, lag.max=20, plot=FALSE) # get the autocorrelation values
+
+pacf(diffclose, lag.max=20)             # plot a partial correlogram
+pacf(diffclose, lag.max=20, plot=FALSE) # get the partial autocorrelation values
+
+auto.arima(Adj.Close)
+
+Adj.Closeseries <- arima(Adj.Close, order=c(0,1,0)) # fit an ARIMA(0,1,1) model
+Adj.Closeseries
+
+Adj.Closeseriesforecasts <- forecast.Arima(Adj.Closeseries, h=365)
+Adj.Closeseriesforecasts
+
+plot.forecast(Adj.Closeseriesforecasts, main = "DAX Forecast for next 365 Days", ylab = "DAX", xlab = "Time")
+
+acf(Adj.Closeseriesforecasts$residuals, lag.max=20)
+Box.test(Adj.Closeseriesforecasts$residuals, lag=20, type="Ljung-Box")
+
+plotForecastErrors <- function(forecasterrors)
+{
+  # make a histogram of the forecast errors:
+  mybinsize <- IQR(forecasterrors)/4
+  mysd   <- sd(forecasterrors)
+  mymin  <- min(forecasterrors) - mysd*5
+  mymax  <- max(forecasterrors) + mysd*3
+  # generate normally distributed data with mean 0 and standard deviation mysd
+  mynorm <- rnorm(10000, mean=0, sd=mysd)
+  mymin2 <- min(mynorm)
+  mymax2 <- max(mynorm)
+  if (mymin2 < mymin) { mymin <- mymin2 }
+  if (mymax2 > mymax) { mymax <- mymax2 }
+  # make a red histogram of the forecast errors, with the normally distributed data overlaid:
+  mybins <- seq(mymin, mymax, mybinsize)
+  hist(forecasterrors, col="red", freq=FALSE, breaks=mybins)
+  # freq=FALSE ensures the area under the histogram = 1
+  # generate normally distributed data with mean 0 and standard deviation mysd
+  myhist <- hist(mynorm, plot=FALSE, breaks=mybins)
+  # plot the normal curve as a blue line on top of the histogram of forecast errors:
+  points(myhist$mids, myhist$density, type="l", col="blue", lwd=2)
+}
+
+plot.ts(Adj.Closeseriesforecasts$residuals)            # make time plot of forecast errors
+plotForecastErrors(Adj.Closeseriesforecasts$residuals) # make a histogram
+
+mean(Adj.Closeseriesforecasts$residuals)
+
+#####################################################################################################################
+
+series
+
+#Dataset for stdev.close
+close <- series[c(1,6)]
+
+close
+
+close <- na.omit(close)
+
+close
+
+stdev.close <- close$volatility1m
+
+stdev.close
+
+mean(stdev.close)
+
+plot.ts(stdev.close)
+
+adfTest(stdev.close, lags = 1, type = c("c"))
+
+diffclose <- close$volatility1m
+
+diffclose <- diff(diffclose, differences = 1)
+
+diffclose
+
+plot.ts(diffclose)
+
+acf(diffclose, lag.max=20)             # plot a correlogram
+acf(diffclose, lag.max=20, plot=FALSE) # get the autocorrelation values
+
+pacf(diffclose, lag.max=20)             # plot a partial correlogram
+pacf(diffclose, lag.max=20, plot=FALSE) # get the partial autocorrelation values
+
+auto.arima(stdev.close)
+
+Adj.Closeseries <- arima(stdev.close, order=c(1,1,2)) # fit an ARIMA(0,1,1) model
+Adj.Closeseries
+
+Adj.Closeseriesforecasts <- forecast.Arima(Adj.Closeseries, h=365)
+Adj.Closeseriesforecasts
+
+plot.forecast(Adj.Closeseriesforecasts, main = "DAX 30 Days Volatility Forecast for next 365 Days", ylab = "DAX Volatility (Points)", xlab = "Time")
+
+acf(Adj.Closeseriesforecasts$residuals, lag.max=20)
+Box.test(Adj.Closeseriesforecasts$residuals, lag=20, type="Ljung-Box")
+
+plotForecastErrors <- function(forecasterrors)
+{
+  # make a histogram of the forecast errors:
+  mybinsize <- IQR(forecasterrors)/4
+  mysd   <- sd(forecasterrors)
+  mymin  <- min(forecasterrors) - mysd*5
+  mymax  <- max(forecasterrors) + mysd*3
+  # generate normally distributed data with mean 0 and standard deviation mysd
+  mynorm <- rnorm(10000, mean=0, sd=mysd)
+  mymin2 <- min(mynorm)
+  mymax2 <- max(mynorm)
+  if (mymin2 < mymin) { mymin <- mymin2 }
+  if (mymax2 > mymax) { mymax <- mymax2 }
+  # make a red histogram of the forecast errors, with the normally distributed data overlaid:
+  mybins <- seq(mymin, mymax, mybinsize)
+  hist(forecasterrors, col="red", freq=FALSE, breaks=mybins)
+  # freq=FALSE ensures the area under the histogram = 1
+  # generate normally distributed data with mean 0 and standard deviation mysd
+  myhist <- hist(mynorm, plot=FALSE, breaks=mybins)
+  # plot the normal curve as a blue line on top of the histogram of forecast errors:
+  points(myhist$mids, myhist$density, type="l", col="blue", lwd=2)
+}
+
+plot.ts(Adj.Closeseriesforecasts$residuals)            # make time plot of forecast errors
+plotForecastErrors(Adj.Closeseriesforecasts$residuals) # make a histogram
+
+mean(Adj.Closeseriesforecasts$residuals)
+
+#####################################################################################################################
+
+#Simulate a random walk
+
+n <- 150
+eps <- rnorm(n)
+x0 <- rep(0, n)
+for (i in seq.int(2, n))
+  x0[i] <- x0[i-1] + eps[i]
+plot(ts(x0))
+
+#Simulate a random walk with drift:
+
+drift <- 2
+x1 <- rep(0, n)
+for (i in seq.int(2, n))
+  x1[i] <- drift + x1[i-1] + eps[i]
+plot(ts(x1))
+
+#Simulate a random walk with a deterministic trend:
+
+trend <- seq_len(n)
+x2 <- rep(0, n)
+for (i in seq.int(2, n))
+  x2[i] <- trend[i] + x2[i-1] + eps[i]
+plot(ts(x2))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# logreturn volatility average for 21 days / 1 month
+
+lag_apply <- function(x, n, callback)	{
+  
+  k = length(x)
+
+  result = rep(0, k);
+
+  for(i in 1 : (k - n + 1))  {
+    
+  result[i] <- callback(x[i :  (i + n -1)]);
+  
+}
+
+  return(result)
+
+}
+
+stdevlog <- lag_apply(x, 21, function(x){sd(x)})
